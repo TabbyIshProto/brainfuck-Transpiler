@@ -10,8 +10,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     //var program = try Program.compile(",>,[-<[-<+<+>>]<[->+<]>>]<<<.", allocator);
-    //var program = try Program.compile(@embedFile("mandelbrot.bf"), allocator);
-    var program = try Program.compile(">^<v", allocator);
+    var program = try Program.compile(@embedFile("mandelbrot.bf"), allocator);
+    //var program = try Program.compile(">^<v", allocator);
     defer program.deinit();
     while (program.tick()) {}
 
@@ -51,8 +51,8 @@ pub const Offset = struct {
         };
     }
 
-    fn add(self: Offset, val: Offset) void {
-        self.x += val.x; // this is the issue
+    fn add(self: *Offset, val: Offset) void {
+        self.x += val.x; // this WAS the issue.
         self.y += val.y;
     }
 };
@@ -92,20 +92,18 @@ pub const Program = struct {
         //TODO: lexer [tokenisation].
         // this ^^ is done using slices which are allocated.
 
-        const cur_inst: *Inst = &insts.items[insts.items.len - 1];
+        const cur_inst = undefined;
+        _ = cur_inst;
         for (simple_replacement_slice) |char| {
             switch (char) {
                 'v', '^', '<', '>' => {
-                    std.debug.print("any '>^<v' is read\n", .{});
                     const direction = Offset.from_char(char);
                     if (insts.getLastOrNull()) |inst| {
+                        std.debug.print("{}\n", .{inst});
                         if (inst == .slide) {
-                            std.debug.print("only one is read due to the get last returning null the first time\n", .{});
-                            cur_inst.slide.add(direction); //this statement is the issue.
-                            std.debug.print("reached", .{});
+                            insts.items[insts.items.len - 1].slide.add(direction); //this statement is the issue.
                             if (eql(inst, Offset{ .x = 0, .y = 0 })) {
                                 _ = insts.pop();
-                                std.debug.print("EEEEEEEEEEEEEEEEEEEEEEEEEEE", .{});
                             }
                             continue;
                         }
@@ -115,7 +113,7 @@ pub const Program = struct {
                 '+' => {
                     if (insts.getLastOrNull()) |inst| {
                         if (inst == .add) {
-                            cur_inst.add +%= 1;
+                            insts.items[insts.items.len - 1].add +%= 1;
                             continue;
                         }
                     }
@@ -124,7 +122,7 @@ pub const Program = struct {
                 '-' => {
                     if (insts.getLastOrNull()) |inst| {
                         if (inst == .add) {
-                            cur_inst.add -%= 1;
+                            insts.items[insts.items.len - 1].add -%= 1;
                             continue;
                         }
                     }
