@@ -1,3 +1,20 @@
+## an analysis of brainfucks patterns ##
+
+
+.symbols {
+	tape 	-> 	a list of brainfuck symbols to be executed
+	ip 	-> 	the instruction pointer for the tape 
+
+	.explaination {
+		-1_th order		->	the set of all brainfuck symbols decomposed of their zig <psudocode> counterparts.
+		0_th order		-> 	all possible condenced notations of the -1_th order set.
+								-addendum: 
+		1_st order			-> all permutations of the 0_th order into an abstract set of   
+	}
+}
+
+
+
 -1_th order simplifications
 >		simplifies to 		->  ip += 1
 <		simplifies to 		->  ip -= 1 {
@@ -27,7 +44,7 @@
 			[>-], [>+], [<-], [<+]				=>	increment // decrement _s1, _s2.. until <0> is found, ignoring cur_cell
 		}
 	}
-	
+
 	
 	+++ simplifies to			->  .add_3
 	-- simplifies to			->  .add_254 {
@@ -37,7 +54,7 @@
 			[-] &[+] 		simplifies to 		->  0
 			[-><], [+<>], [+><], [-<>], [->>><<<]		reduce to		->  0
 
-			// the 4 "reducables" of order 1						<.slide reversable with same effect just -1 instead of +1>
+			// the 4 simple "reducables" of order 1						<.slide reversable with same effect just -1 instead of +1>
 			[->+<]		->	set cur_cell 0, 			add_<what was> to cell_+1
 			[+>+<]		->	set 0, 						add_<the inverse of what was> to _+1		<-add>
 			[->-<]		->	0,				sub to _+!

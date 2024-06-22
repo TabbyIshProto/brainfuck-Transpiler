@@ -10,32 +10,43 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     //var program = try Program.compile(",>,[-<[-<+<+>>]<[->+<]>>]<<<.", allocator);
-    var program = try Program.compile(@embedFile("mandelbrot.bf"), allocator);
-    //var program = try Program.compile(">^<v", allocator);
+    //var program = try Program.compile(@embedFile("mandelbrot.bf"), allocator);
+    var program = try Program.compile("4++++++++.>6+++++.+++++++..+++.>2.>5+++++++.<<.+++.>>>7----.>6++++.>2+.>1------.", allocator);
     defer program.deinit();
     while (program.tick()) {}
 
-    const screenWidth = 800;
-    const screenHeight = 600;
+    if (reasons_to_want_to_test_raylib() > 2) {
+        const screenWidth = 800;
+        const screenHeight = 600;
 
-    rl.initWindow(screenWidth, screenHeight, "Title");
-    defer rl.closeWindow();
+        rl.initWindow(screenWidth, screenHeight, "Title");
+        defer rl.closeWindow();
 
-    rl.setTargetFPS(60);
-    while (!rl.windowShouldClose()) {
-        rl.beginDrawing();
-        defer rl.endDrawing();
+        rl.setTargetFPS(60);
+        while (!rl.windowShouldClose()) {
+            rl.beginDrawing();
+            defer rl.endDrawing();
 
-        rl.clearBackground(rl.Color.white);
-        const fontsize: i32 = 20;
-        var i: i32 = 0;
-        while (i < 137) : (i += 1) {
-            //rl.drawPixel(posX: i32, posY: i32, color: Color)
-            rl.drawText("U", @mod(i * (fontsize - 4), screenWidth), @divFloor(i * (fontsize - 4), screenWidth) * (fontsize - 4), fontsize, rl.Color.violet);
+            rl.clearBackground(rl.Color.white);
+            const fontsize: i32 = 20;
+            var i: i32 = 0;
+            while (i < 137) : (i += 1) {
+                //rl.drawPixel(posX: i32, posY: i32, color: Color)
+                rl.drawText("U", @mod(i * (fontsize - 4), screenWidth), @divFloor(i * (fontsize - 4), screenWidth) * (fontsize - 4), fontsize, rl.Color.violet);
+            }
+            rl.drawText("Congrats! You created your first window!", 190, 200, 20, rl.Color.light_gray);
         }
-        rl.drawText("Congrats! You created your first window!", 190, 200, 20, rl.Color.light_gray);
     }
 }
+pub fn reasons_to_want_to_test_raylib() u8 {
+    return 0;
+}
+
+pub const Typ = enum {
+    strict, //no comments or other characters allowed besides +-><[]., <still ignores whitespace tho>
+    default, //sees any other char as comment and allows for //, / and # comment types to include +-><[]., chars in them
+    all_extentions, //initialisers, halts, 2d band /grid of cells, macros, and all fancy things all enabled
+};
 
 pub const Offset = struct {
     x: i32 = 0,
@@ -96,12 +107,16 @@ pub const Program = struct {
         _ = cur_inst;
         for (simple_replacement_slice) |char| {
             switch (char) {
+                '1', '2', '3', '4', '5', '6', '7', '8', '9' => {
+                    const imm = (char - '0') * 0x10;
+                    try insts.append(Inst{ .set = imm }); //either set or add
+                },
                 'v', '^', '<', '>' => {
                     const direction = Offset.from_char(char);
                     if (insts.getLastOrNull()) |inst| {
-                        std.debug.print("{}\n", .{inst});
+                        //std.debug.print("{}\n", .{inst});
                         if (inst == .slide) {
-                            insts.items[insts.items.len - 1].slide.add(direction); //this statement is the issue.
+                            insts.items[insts.items.len - 1].slide.add(direction);
                             if (eql(inst, Offset{ .x = 0, .y = 0 })) {
                                 _ = insts.pop();
                             }
