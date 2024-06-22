@@ -1,16 +1,52 @@
->>>>> simplifies to 		->  .slide .x_5 {
-	>>>><<v simplifies 	to				->  .slide .x_4 .y_-1
-	>^<v simplifies to 					->  nao
+-1_th order simplifications
+>		simplifies to 		->  ip += 1
+<		simplifies to 		->  ip -= 1 {
+	tape[cell_pointer] => cur_cell
 }
-	
-+++ simplifies to			->  .add_3
--- simplifies to			->  .add_254 {
-	+++-+++++- simplifies to			->  .add_6
-}
-	
+
++		simplifies to 		->  cur_cell += 1
+-		simplifies to 		->  cur_cell -= 1
+[		simplifies to 		->  ip = if(cur_cell == 0) &adress else ip + 1
+]		simplifies to 		->  reverse statement of ^^
+
+.		simplifies to_<in default bf> 		->  print <cur_cell> as char
+,		simplifies to_<in default bf>		->  take input and write to <cur_cell> {
 
 
-.set subset of Brainfuck {
-	[-] &[+] simplifies to 			->  0
-	[->+<]
+
+	>>>>> simplifies to 		->  .slide .x_5 {
+	>>>><<v simplifies 	to			->  .slide .x_4 .y_-1
+	>^<v simplifies to 				->  nao
+
+		.slide subset {
+			[>] &[<]				=> find 0 left or right
+			[>>>..] reduces to					-> find zero in increments of n
+			[<<^^^..] reduces to				-> find zero in increments of n²
+
+			[->], [-<], [+>], [+<] 		=> 	increment // decrement cur_cell, _s1, _s2.. until <0> is found			//s stands for sign, + or -
+			[>-], [>+], [<-], [<+]				=>	increment // decrement _s1, _s2.. until <0> is found, ignoring cur_cell
+		}
+	}
+	
+	
+	+++ simplifies to			->  .add_3
+	-- simplifies to			->  .add_254 {
+		+++-+++++- simplifies to		->  .add_6
+
+		.set subset of add {
+			[-] &[+] 		simplifies to 		->  0
+			[-><], [+<>], [+><], [-<>], [->>><<<]		reduce to		->  0
+
+			// the 4 "reducables" of order 1						<.slide reversable with same effect just -1 instead of +1>
+			[->+<]		->	set cur_cell 0, 			add_<what was> to cell_+1
+			[+>+<]		->	set 0, 						add_<the inverse of what was> to _+1		<-add>
+			[->-<]		->	0,				sub to _+!
+			[+>-<]		->	0,				-sub _+1
+		}
+	}
+
 }
+
+
+
+
