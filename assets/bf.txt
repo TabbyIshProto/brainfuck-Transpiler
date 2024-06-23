@@ -10,6 +10,10 @@
 		0_th order		-> 	all possible condenced notations of the -1_th order set.
 								-addendum: 
 		1_st order			-> all permutations of the 0_th order into an abstract set of   
+			-if no other [] groups are found within
+			-&the sum of .slide Insts == 0
+			-&if the amount added to cur_cell is co-prime with the value in cur_cell
+				then it succeeds the check
 	}
 }
 
@@ -63,7 +67,19 @@
 	}
 
 }
+you itterate through a slice of Inst
+for every .slide you add its value to a sum
+at every point you see a .ADD and sum == 0, add that Inst<'s value> to a seperate list <of u8*>
 
+when sum == 0 and the <slice of Insts> is empty, it passed the first check.
+1*when all the seperate .add, added up are co-prime with value at cur_cell. it passes the second check. // no need for a 2nd list, just make another accumulator.
+if no [], <other iterfearing Insts> pairs are found during iterating, it passes the final check and can be processed.
 
+//1: we do this, because this program would fail the checksum => "[->+<+<+>]" but if we dont do this "[->+<+<+>+]" would fail despite being co-prime with any N in cur_cell.
 
+[->+]
+[-], [+]
+[>-<+] 		would all pass otherwise.
+@mod(n, i) == 0??
 
+co-prime check condences to: @ctz(&cur_cell) >= @ctz(n_inc)?

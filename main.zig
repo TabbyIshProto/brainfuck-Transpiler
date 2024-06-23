@@ -10,8 +10,8 @@ pub fn main() !void {
     const allocator = gpa.allocator();
 
     //var program = try Program.compile(",>,[-<[-<+<+>>]<[->+<]>>]<<<.", allocator);
-    //var program = try Program.compile(@embedFile("mandelbrot.bf"), allocator);
-    var program = try Program.compile("4++++++++.>6+++++.+++++++..+++.>2.>5+++++++.<<.+++.>>>7----.>6++++.>2+.>1------.", allocator);
+    var program = try Program.compile(Typ.strict, @embedFile("mandelbrot.bf"), allocator);
+    //var program = try Program.compile(Typ.all_extentions, "4++++++++.>6+++++.+++++++..+++.>2.>5+++++++.<<.+++.>>>7----.>6++++.>2+.>1------.", allocator);
     defer program.deinit();
     while (program.tick()) {}
 
@@ -68,7 +68,7 @@ pub const Offset = struct {
     }
 };
 
-pub const Inst = union(enum) {
+pub const Ist = union(enum) {
     add: u8,
     slide: Offset,
     jz: usize,
@@ -76,6 +76,9 @@ pub const Inst = union(enum) {
     input: void,
     output: void,
     set: u8,
+
+    sentinel: void,
+    system: [*]const Ist, // avoid problem of tagged union storage using pointers
 };
 
 pub const Program = struct {
@@ -83,33 +86,43 @@ pub const Program = struct {
     const mem_len_y: u8 = 5;
 
     allocator: std.mem.Allocator,
-    instr: []const Inst,
+    instr: []const Ist,
     ip: usize,
 
     grid: [mem_len_y][mem_len_x]u8,
     tx_ptr: usize,
     ty_ptr: u8,
 
-    pub fn compile(source_slice: []const u8, allocator: std.mem.Allocator) error{ InvalidProgram, OutOfMemory }!Program {
-        var insts = std.ArrayList(Inst).init(allocator);
-        errdefer insts.deinit();
-        var openings = std.ArrayList(usize).init(allocator);
-        defer openings.deinit();
+    fn debug_program(slice: []const u8) error{_InvalidProgram_} {
+        std.debug.print("Things go wrong at this locaiton: {}", .{std.mem.indexOfNone(u8, slice, "+-><[],. \n\t")});
+        return error._InvalidProgram_;
+    }
 
-        const simple_replacement_slice = try allocator.alloc(u8, std.mem.replacementSize(u8, source_slice, "[-]", "0"));
-        defer allocator.free(simple_replacement_slice);
-        _ = std.mem.replace(u8, source_slice, "[-]", "0", simple_replacement_slice);
+    pub fn compile(program_type: Typ, source_slice: []const u8, allocator: std.mem.Allocator) error{ _InvalidProgram_, OutOfMemory }!Program {
+        if (program_type == Typ.strict) return if (std.mem.indexOfNone(u8, source_slice, "+-><[],. \n\t") == null) gen_intermediate(source_slice, allocator) else debug_program(source_slice);
 
+        const intr_rep = try gen_intermediate(source_slice, allocator);
+        return intr_rep;
+        // lexical analysis, syntax analysis, semantic analysis,intermediate representation generator, code optimiser, target code generator [JIT compiler [x86 asm]] or direct translation.
         //TODO: lexer [tokenisation].
         // this ^^ is done using slices which are allocated.
 
+    }
+
+    fn gen_intermediate(slice: []const u8, allocator: std.mem.Allocator) error{ _InvalidProgram_, OutOfMemory }!Program {
+        var insts = std.ArrayList(Ist).init(allocator);
+        errdefer insts.deinit();
+
+        var open_brackets = std.ArrayList(usize).init(allocator);
+        defer open_brackets.deinit();
+
         const cur_inst = undefined;
         _ = cur_inst;
-        for (simple_replacement_slice) |char| {
+        for (slice) |char| {
             switch (char) {
                 '1', '2', '3', '4', '5', '6', '7', '8', '9' => {
                     const imm = (char - '0') * 0x10;
-                    try insts.append(Inst{ .set = imm }); //either set or add
+                    try insts.append(Ist{ .set = imm }); //either set or add
                 },
                 'v', '^', '<', '>' => {
                     const direction = Offset.from_char(char);
@@ -123,7 +136,7 @@ pub const Program = struct {
                             continue;
                         }
                     }
-                    try insts.append(Inst{ .slide = direction });
+                    try insts.append(Ist{ .slide = direction });
                 },
                 '+' => {
                     if (insts.getLastOrNull()) |inst| {
@@ -132,7 +145,7 @@ pub const Program = struct {
                             continue;
                         }
                     }
-                    try insts.append(Inst{ .add = 1 });
+                    try insts.append(Ist{ .add = 1 });
                 },
                 '-' => {
                     if (insts.getLastOrNull()) |inst| {
@@ -141,26 +154,26 @@ pub const Program = struct {
                             continue;
                         }
                     }
-                    try insts.append(Inst{ .add = 0xFF });
+                    try insts.append(Ist{ .add = 0xFF });
                 },
-                '.' => try insts.append(Inst{ .output = {} }),
-                ',' => try insts.append(Inst{ .input = {} }),
+                '.' => try insts.append(Ist{ .output = {} }),
+                ',' => try insts.append(Ist{ .input = {} }),
                 '[' => {
-                    try openings.append(insts.items.len);
-                    try insts.append(Inst{ .jz = undefined });
+                    try open_brackets.append(insts.items.len);
+                    try insts.append(Ist{ .jz = undefined });
                 },
                 ']' => {
-                    const open = openings.popOrNull() orelse return error.InvalidProgram;
-                    try insts.append(Inst{ .jnz = open + 1 });
+                    const open = open_brackets.popOrNull() orelse return error._InvalidProgram_;
+                    try insts.append(Ist{ .jnz = open + 1 });
                     insts.items[open].jz = insts.items.len;
                 },
-                '0' => try insts.append(Inst{ .set = 0 }),
-                //else => return error.InvalidProgram,
+                '0' => try insts.append(Ist{ .set = 0 }),
+                //else => return error._InvalidProgram_,
                 else => {},
             }
         }
-        if (openings.items.len != 0) {
-            return error.InvalidProgram;
+        if (open_brackets.items.len != 0) {
+            return error._InvalidProgram_;
         }
 
         return Program{
@@ -211,13 +224,14 @@ pub const Program = struct {
                 self.ip = adress;
                 return true;
             },
+            else => unreachable,
         }
         self.ip += 1;
         return true;
     }
 };
 
-pub fn eql(first: Inst, second: Offset) bool {
+pub fn eql(first: Ist, second: Offset) bool {
     switch (first) {
         .slide => if (first.slide.x == second.x and first.slide.y == second.y) return true,
         else => {},
@@ -239,11 +253,25 @@ pub fn eql(first: Inst, second: Offset) bool {
 //}
 
 test "type_test" {
-    const yeet = Inst{ .slide = Offset{ .x = 0, .y = 0 } };
+    const yeet = Ist{ .slide = Offset{ .x = 0, .y = 0 } };
     const boo = eql(yeet, Offset{ .x = 0, .y = 0 });
     std.debug.print("the tagged unions match: {}\n", .{boo});
 }
 
+test "ternary" {
+    var itr: u8 = 5;
+    const let = 5;
+
+    itr = if (let < 6) 10 else 15;
+    itr = 30 + if (let <= 7) 17 else 0;
+    std.debug.print("yeen has done: '{}' laps around the pole due to zoomies\n", .{itr});
+}
+
+test "negation" {
+    var n: u8 = 30;
+    n = ~n + 1;
+    std.debug.print("the inverse of 30 <256 - 30> is: {}\n", .{n});
+}
 // step 1: lexer, ignores whitespace, comments and divies up a program into its tokens.
 //
 //
