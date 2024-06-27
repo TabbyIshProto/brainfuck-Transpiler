@@ -14,6 +14,11 @@
 			-&the sum of .slide Insts == 0
 			-&if the amount added to cur_cell is co-prime with the value in cur_cell
 				then it succeeds the check
+
+		the definition of a file is: {
+			file ::= expr* eof
+			expr ::= ">" | "<" | "+" | "-" | "." | "," | "[" expr* "]"
+		}
 	}
 }
 
@@ -83,3 +88,10 @@ if no [], <other iterfearing Insts> pairs are found during iterating, it passes 
 @mod(n, i) == 0??
 
 co-prime check condences to: @ctz(&cur_cell) >= @ctz(n_inc)?
+
+
+-[+>-]+ = search
+search
+
+TODO: nested files
+change all slide &add into u8 &u16 respectively

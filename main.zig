@@ -1,6 +1,8 @@
 const std = @import("std");
 const rl = @import("raylib");
 
+const Alloc = std.mem.Allocator;
+
 pub fn main() !void {
     std.debug.print("UwU x3 you're now gay\n", .{});
 
@@ -12,6 +14,7 @@ pub fn main() !void {
     //var program = try Program.compile(",>,[-<[-<+<+>>]<[->+<]>>]<<<.", allocator);
     var program = try Program.compile(Typ.strict, @embedFile("mandelbrot.bf"), allocator);
     //var program = try Program.compile(Typ.all_extentions, "4++++++++.>6+++++.+++++++..+++.>2.>5+++++++.<<.+++.>>>7----.>6++++.>2+.>1------.", allocator);
+    //var program = try Program.compile(Typ.all_extentions, @embedFile("test.bf"), allocator);
     defer program.deinit();
     while (program.tick()) {}
 
@@ -48,29 +51,34 @@ pub const Typ = enum {
     all_extentions, //initialisers, halts, 2d band /grid of cells, macros, and all fancy things all enabled
 };
 
-pub const Offset = struct {
-    x: i32 = 0,
-    y: i32 = 0,
+pub const Move = struct {
+    const y_len = Program.mem_len_y;
 
-    fn from_char(char: u8) Offset {
-        return switch (char) {
-            'v' => Offset{ .y = -1 },
-            '^' => Offset{ .y = 1 },
-            '>' => Offset{ .x = 1 },
-            '<' => Offset{ .x = -1 },
-            else => unreachable,
+    tape_ptrs: [y_len]i32 = [1]i32{0} ** y_len,
+    raise: i8,
+
+    pub fn init(height: u8, offset: i16) Move {
+        var arr = [1]i32{0} ** y_len;
+        arr[height] = offset;
+        return Move{
+            .tape_ptrs = arr,
+            .raise = 0,
         };
     }
 
-    fn add(self: *Offset, val: Offset) void {
-        self.x += val.x; // this WAS the issue.
-        self.y += val.y;
+    pub fn slide(self: *Move, pointer: u8, amount: i32) void {
+        self.tape_ptrs[pointer] += amount;
+    }
+
+    pub fn isEmpty(self: *const Move) bool {
+        return std.mem.eql(i32, &self.tape_ptrs, &[1]i32{0} ** y_len);
     }
 };
 
 pub const Ist = union(enum) {
     add: u8,
-    slide: Offset,
+    move: Move, //make u16 +%= -%=
+
     jz: usize,
     jnz: usize,
     input: void,
@@ -83,91 +91,118 @@ pub const Ist = union(enum) {
 
 pub const Program = struct {
     const mem_len_x: usize = 0x1000;
-    const mem_len_y: u8 = 5;
+    const mem_len_y: u8 = 4;
 
     allocator: std.mem.Allocator,
     instr: []const Ist,
     ip: usize,
 
-    grid: [mem_len_y][mem_len_x]u8,
-    tx_ptr: usize,
+    grid: [mem_len_y][mem_len_x]u8, //TODO: make this not a 2d coordinate system but independant tapes.
+    tx_ptr: [mem_len_y]usize,
     ty_ptr: u8,
 
-    fn debug_program(slice: []const u8) error{_InvalidProgram_} {
-        std.debug.print("Things go wrong at this locaiton: {}", .{std.mem.indexOfNone(u8, slice, "+-><[],. \n\t")});
-        return error._InvalidProgram_;
-    }
-
-    pub fn compile(program_type: Typ, source_slice: []const u8, allocator: std.mem.Allocator) error{ _InvalidProgram_, OutOfMemory }!Program {
-        if (program_type == Typ.strict) return if (std.mem.indexOfNone(u8, source_slice, "+-><[],. \n\t") == null) gen_intermediate(source_slice, allocator) else debug_program(source_slice);
+    pub fn compile(program_type: Typ, source_slice: []const u8, allocator: Alloc) error{ _lexingFailiure_, _InvalidProgram_, OutOfMemory }!Program {
+        if (program_type == Typ.strict) return if (std.mem.indexOfNone(u8, source_slice, "+-><[],. \n\t\r") == null)
+            gen_intermediate(source_slice, allocator)
+        else
+            error._InvalidProgram_;
 
         const intr_rep = try gen_intermediate(source_slice, allocator);
         return intr_rep;
-        // lexical analysis, syntax analysis, semantic analysis,intermediate representation generator, code optimiser, target code generator [JIT compiler [x86 asm]] or direct translation.
-        //TODO: lexer [tokenisation].
-        // this ^^ is done using slices which are allocated.
-
+        // lexical analysis, syntax analysis, semantic analysis, intermediate representation generator, code optimiser, target code generator [JIT compiler [x86 asm]] or direct translation.
     }
 
-    fn gen_intermediate(slice: []const u8, allocator: std.mem.Allocator) error{ _InvalidProgram_, OutOfMemory }!Program {
-        var insts = std.ArrayList(Ist).init(allocator);
-        errdefer insts.deinit();
+    pub fn gen_intermediate(slice: []const u8, allocator: std.mem.Allocator) error{ _InvalidProgram_, OutOfMemory }!Program {
+        var inst_list = std.ArrayList(Ist).init(allocator);
+        errdefer inst_list.deinit();
 
         var open_brackets = std.ArrayList(usize).init(allocator);
         defer open_brackets.deinit();
 
-        const cur_inst = undefined;
-        _ = cur_inst;
+        //const checks = struct {
+        //    const list_ref: *std.ArrayList = undefined;
+        //
+        //    fn set_ref(reference: *std.ArrayList) void {
+        //        @This().list_ref = reference;
+        //    }
+        //
+        //    fn compute(ist: Ist) bool {
+        //        if (list_ref.*.getLastOrNull()) |inst| {
+        //            if (inst == ist) {
+        //               return true;
+        //            } else return false;
+        //        }
+        //    }
+        //};
+
         for (slice) |char| {
+            var cur_height: u2 = 0;
             switch (char) {
                 '1', '2', '3', '4', '5', '6', '7', '8', '9' => {
                     const imm = (char - '0') * 0x10;
-                    try insts.append(Ist{ .set = imm }); //either set or add
+                    try inst_list.append(Ist{ .set = imm }); //either set or add
                 },
-                'v', '^', '<', '>' => {
-                    const direction = Offset.from_char(char);
-                    if (insts.getLastOrNull()) |inst| {
-                        //std.debug.print("{}\n", .{inst});
-                        if (inst == .slide) {
-                            insts.items[insts.items.len - 1].slide.add(direction);
-                            if (eql(inst, Offset{ .x = 0, .y = 0 })) {
-                                _ = insts.pop();
-                            }
+                '^' => {
+                    cur_height +%= 1;
+                    if (inst_list.getLastOrNull()) |inst| {
+                        if (inst == .move) {
+                            inst_list.items[inst_list.items.len - 1].move.raise += 1;
                             continue;
                         }
                     }
-                    try insts.append(Ist{ .slide = direction });
+                    try inst_list.append(Ist{ .move = Move{ .raise = 1 } });
+                },
+                'v' => {
+                    cur_height -%= 1;
+                    if (inst_list.getLastOrNull()) |inst| {
+                        if (inst == .move) {
+                            inst_list.items[inst_list.items.len - 1].move.raise -= 1;
+                            continue;
+                        }
+                    }
+                    try inst_list.append(Ist{ .move = Move{ .raise = -1 } });
+                },
+                '<', '>' => {
+                    const offset: i16 = 0 - ('=' - char);
+                    if (inst_list.getLastOrNull()) |inst| {
+                        if (inst == .move) {
+                            inst_list.items[inst_list.items.len - 1].move.slide(cur_height, offset);
+                            if (inst_list.items[inst_list.items.len - 1].move.isEmpty()) _ = inst_list.pop();
+                            continue;
+                        }
+                    }
+                    try inst_list.append(Ist{ .move = Move.init(cur_height, offset) });
                 },
                 '+' => {
-                    if (insts.getLastOrNull()) |inst| {
+                    if (inst_list.getLastOrNull()) |inst| {
                         if (inst == .add) {
-                            insts.items[insts.items.len - 1].add +%= 1;
+                            inst_list.items[inst_list.items.len - 1].add +%= 1;
                             continue;
                         }
                     }
-                    try insts.append(Ist{ .add = 1 });
+                    try inst_list.append(Ist{ .add = 1 });
                 },
                 '-' => {
-                    if (insts.getLastOrNull()) |inst| {
+                    if (inst_list.getLastOrNull()) |inst| {
                         if (inst == .add) {
-                            insts.items[insts.items.len - 1].add -%= 1;
+                            inst_list.items[inst_list.items.len - 1].add -%= 1;
                             continue;
                         }
                     }
-                    try insts.append(Ist{ .add = 0xFF });
+                    try inst_list.append(Ist{ .add = 0xFF });
                 },
-                '.' => try insts.append(Ist{ .output = {} }),
-                ',' => try insts.append(Ist{ .input = {} }),
+                '.' => try inst_list.append(Ist{ .output = {} }),
+                ',' => try inst_list.append(Ist{ .input = {} }),
                 '[' => {
-                    try open_brackets.append(insts.items.len);
-                    try insts.append(Ist{ .jz = undefined });
+                    try open_brackets.append(inst_list.items.len);
+                    try inst_list.append(Ist{ .jz = undefined });
                 },
                 ']' => {
                     const open = open_brackets.popOrNull() orelse return error._InvalidProgram_;
-                    try insts.append(Ist{ .jnz = open + 1 });
-                    insts.items[open].jz = insts.items.len;
+                    try inst_list.append(Ist{ .jnz = open + 1 });
+                    inst_list.items[open].jz = inst_list.items.len;
                 },
-                '0' => try insts.append(Ist{ .set = 0 }),
+                '0' => try inst_list.append(Ist{ .set = 0 }),
                 //else => return error._InvalidProgram_,
                 else => {},
             }
@@ -178,11 +213,11 @@ pub const Program = struct {
 
         return Program{
             .allocator = allocator,
-            .instr = try insts.toOwnedSlice(),
+            .instr = try inst_list.toOwnedSlice(),
             .ip = 0,
 
             .grid = [1][mem_len_x]u8{[1]u8{0} ** mem_len_x} ** mem_len_y,
-            .tx_ptr = 0,
+            .tx_ptr = [1]usize{0} ** mem_len_y,
             .ty_ptr = 0,
         };
     }
@@ -194,33 +229,36 @@ pub const Program = struct {
 
     pub fn tick(self: *Program) bool {
         if (self.ip >= self.instr.len) return false;
+        const yx = self.tx_ptr[self.ty_ptr];
         switch (self.instr[self.ip]) {
             .add => |num| {
-                self.grid[self.ty_ptr][self.tx_ptr] +%= num;
+                self.grid[self.ty_ptr][yx] +%= num;
             },
-            .slide => |amount| {
-                const x_ptr: isize = @intCast(self.tx_ptr);
-                const y_ptr: isize = @intCast(self.ty_ptr);
-                self.tx_ptr = @intCast(@mod(x_ptr + amount.x, mem_len_x)); // self optimises when compiling.
-                self.ty_ptr = @intCast(@mod(y_ptr + amount.y, mem_len_y));
+            .move => |amount_union| {
+                for (amount_union.tape_ptrs, 0..) |offset, idx| {
+                    const x_ptr: isize = @intCast(self.tx_ptr[idx]);
+                    self.tx_ptr[idx] = @intCast(@mod(x_ptr + offset, mem_len_x));
+                }
+                const y_ptr: i8 = @intCast(self.ty_ptr);
+                self.ty_ptr = @intCast(@mod(y_ptr + amount_union.raise, mem_len_y));
             },
             .output => {
-                const buf = [1]u8{self.grid[self.ty_ptr][self.tx_ptr]};
+                const buf = [1]u8{self.grid[self.ty_ptr][yx]};
                 std.io.getStdOut().writeAll(&buf) catch {};
             },
             .input => {
                 var buf = [1]u8{0};
                 _ = std.io.getStdIn().readAll(&buf) catch 0;
-                self.grid[self.ty_ptr][self.tx_ptr] = buf[0];
+                self.grid[self.ty_ptr][yx] = buf[0];
             },
             .set => |imm| {
-                self.grid[self.ty_ptr][self.tx_ptr] = imm;
+                self.grid[self.ty_ptr][yx] = imm;
             },
-            .jz => |adress| if (self.grid[self.ty_ptr][self.tx_ptr] == 0) {
+            .jz => |adress| if (self.grid[self.ty_ptr][yx] == 0) {
                 self.ip = adress;
                 return true;
             },
-            .jnz => |adress| if (self.grid[self.ty_ptr][self.tx_ptr] != 0) {
+            .jnz => |adress| if (self.grid[self.ty_ptr][yx] != 0) {
                 self.ip = adress;
                 return true;
             },
@@ -231,13 +269,6 @@ pub const Program = struct {
     }
 };
 
-pub fn eql(first: Ist, second: Offset) bool {
-    switch (first) {
-        .slide => if (first.slide.x == second.x and first.slide.y == second.y) return true,
-        else => {},
-    }
-    return false;
-}
 // ",>,[-<[-<+<+>>]<[->+<]>>]<<<."
 //test "Create &Write-to file" {
 //    const file = try std.fs.cwd().createFile("output.txt", .{ .read = true });
@@ -251,12 +282,6 @@ pub fn eql(first: Ist, second: Offset) bool {
 //    const bytes_read = try file.readAll(&buffer);
 //    _ = bytes_read;
 //}
-
-test "type_test" {
-    const yeet = Ist{ .slide = Offset{ .x = 0, .y = 0 } };
-    const boo = eql(yeet, Offset{ .x = 0, .y = 0 });
-    std.debug.print("the tagged unions match: {}\n", .{boo});
-}
 
 test "ternary" {
     var itr: u8 = 5;
