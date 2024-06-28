@@ -53,13 +53,16 @@ pub const Lexer = struct {
                 const caller_char: []const u8 = [1]u8{char};
                 const non_white = std.mem.indexOfNonePos(u8, self.source, next_loc, caller_char) orelse self.source.len;
                 self.loc = non_white;
-                const res = Lexeme{ .tag = switch (char) {
-                    '+' => LexemeTag.@"+",
-                    '-' => LexemeTag.@"-",
-                    '>' => LexemeTag.@">",
-                    '<' => LexemeTag.@"<",
-                    else => unreachable,
-                }, .span = .{ next_loc, non_white } };
+                const res = Lexeme{
+                    .tag = switch (char) { // ^^ might result in bug later down the line with whitespace being berween +++++ tuples.
+                        '+' => LexemeTag.@"+",
+                        '-' => LexemeTag.@"-",
+                        '>' => LexemeTag.@">",
+                        '<' => LexemeTag.@"<",
+                        else => unreachable,
+                    },
+                    .span = .{ next_loc, non_white },
+                };
                 return res;
             },
             '[' => LexemeTag.openPar,
@@ -81,4 +84,24 @@ pub const Lexer = struct {
 
 test "lexer" {
     //nothing here yet :P
+    const source = "+++ > 925- -[ +<- ]+. #";
+    var tokeniser = Lexer.create(source);
+
+    for ([_]Lexeme{
+        .{ .tag = .@"+", .span = .{ 0, 3 } },
+        .{ .tag = .@">", .span = .{ 4, 5 } },
+        .{ .tag = .num, .span = .{ 6, 9 } },
+        .{ .tag = .@"-", .span = .{ 9, 10 } },
+        .{ .tag = .@"-", .span = .{ 11, 12 } },
+        .{ .tag = .openPar, .span = .{ 12, 13 } },
+        .{ .tag = .@"+", .span = .{ 14, 15 } },
+        .{ .tag = .@"<", .span = .{ 15, 16 } },
+        .{ .tag = .@"-", .span = .{ 16, 17 } },
+        .{ .tag = .closePar, .span = .{ 18, 19 } },
+        .{ .tag = .@"+", .span = .{ 19, 20 } },
+        .{ .tag = .@".", .span = .{ 20, 21 } },
+        .{ .tag = .invalidette, .span = .{ 22, 23 } },
+    }) |expected| {
+        try std.testing.expectEqual(expected, tokeniser.next());
+    }
 }
