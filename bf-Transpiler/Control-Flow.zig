@@ -10,7 +10,6 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     const file = @embedFile("test-Programs/yeen.bf");
-    const tree = try ast.parse(lxr.Lexer.create(file), lxr.Lexeme.eof, allocator);
     defer tree.free();
 
     std.debug.print("{}", .{tree});
