@@ -31,7 +31,7 @@ pub const Lexer = struct {
         return Lexer{ .source = source };
     }
 
-    pub fn next(self: *Lexer) void {
+    pub fn next(self: *Lexer) Lexeme {
         if (self.peek) |token| {
             self.peek = null;
             return token;
@@ -50,7 +50,7 @@ pub const Lexer = struct {
                 return res;
             },
             '+', '-', '>', '<' => {
-                const caller_char: []const u8 = [1]u8{char};
+                const caller_char: []const u8 = &[1]u8{char};
                 const non_white = std.mem.indexOfNonePos(u8, self.source, next_loc, caller_char) orelse self.source.len;
                 self.loc = non_white;
                 const res = Lexeme{
