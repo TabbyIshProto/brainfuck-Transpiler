@@ -61,23 +61,22 @@ pub const Lexer = struct {
     }
 
     pub fn next(self: *Lexer) Lexeme {
+        const src = self.source;
         if (self.peek) |token| {
             self.peek = null;
             return token;
         }
 
-        const next_loc = std.mem.indexOfNonePos(u8, self.source, self.loc, &std.ascii.whitespace) orelse
-            return Lexeme{ .tag = .eof, .span = .{ self.source.len, self.source.len } };
+        const next_loc = std.mem.indexOfNonePos(u8, src, self.loc, &std.ascii.whitespace) orelse
+            return Lexeme{ .tag = .eof, .span = .{ src.len, src.len } };
 
-        const char = self.source[next_loc];
+        const char = src[next_loc];
         const tag = switch (char) {
             '#' => return Lexeme{ .tag = .comment, .span = until(self, next_loc, &eol ++ [1]u8{'#'}) },
             'g'...'u', 'w'...'z', 'A'...'Z', '_' => {
-                const limit = if (next_loc + spcftn.ident_char_cap < self.source.len) spcftn.ident_char_cap else self.source.len - next_loc;
-                var delimiter_loc = next_loc + std.mem.indexOfAnyPos(u8, self.source[next_loc .. next_loc + limit], 0, &std.ascii.whitespace ++ ident_delimiters).?;
-                if (containsAny(u8, self.source[delimiter_loc], &ident_delimiters)) {
-                    while (self.source[delimiter_loc - 1] == 'v') : (delimiter_loc -= 1) {} //.numvv+
-                }
+                const limit = next_loc + @min(next_loc + spcftn.ident_char_cap, src.len - next_loc);
+                var delimiter_loc = next_loc + std.mem.indexOfAnyPos(u8, src[next_loc..limit], 0, &std.ascii.whitespace ++ ident_delimiters).?;
+                if (containsAny(u8, src[delimiter_loc], &ident_delimiters)) while (src[delimiter_loc - 1] == 'v') : (delimiter_loc -= 1) {};
                 self.loc = delimiter_loc;
                 return Lexeme{ .tag = .ident, .span = .{ next_loc, delimiter_loc } };
             },
@@ -157,15 +156,16 @@ test "lexer" {
         .{ .tag = .openPar, .span = .{ 6, 7 } },
         .{ .tag = .@"-", .span = .{ 7, 8 } },
         .{ .tag = .@".", .span = .{ 8, 9 } },
-        .{ .tag = .ident, .span = .{ 9, 12 } },
-        .{ .tag = .v, .span = .{ 12, 14 } },
-        .{ .tag = .@"+", .span = .{ 14, 15 } },
-        .{ .tag = .closePar, .span = .{ 15, 16 } },
-        .{ .tag = .comment, .span = .{ 18, 66 } },
+        .{ .tag = .ident, .span = .{ 9, 14 } },
+        .{ .tag = .v, .span = .{ 14, 15 } },
+        .{ .tag = .@"+", .span = .{ 15, 16 } },
+        .{ .tag = .closePar, .span = .{ 16, 17 } },
+        .{ .tag = .comment, .span = .{ 19, 67 } },
 
-        .{ .tag = .eof, .span = .{ 68, 68 } },
+        .{ .tag = .eof, .span = .{ 69, 69 } },
     }) |expected| {
         try std.testing.expectEqual(expected, tokeniser.next());
     }
 } //ff7
-//[-.numvv+]
+//[-.numvav+]
+// making changes here doesn't magically mean they change over in tok-test.bf
