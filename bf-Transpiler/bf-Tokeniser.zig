@@ -56,11 +56,12 @@ pub const Lexer = struct {
         ident,
     }; // 0 1 2 3 4, len = 5
 
-    fn check(src: []const u8, loc: usize) ?usize {
-        return loc + for (0..spcftn.int_size >> 2) |jdex| {
+    fn check(src: []const u8, loc: usize) ?usize { // ff7f
+        const lim = @min(spcftn.int_size >> 2, src.len - loc);
+        return loc + for (0..lim) |jdex| {
             if (std.ascii.isWhitespace(src[loc + jdex])) break jdex;
             if (!contains(u8, src[loc + jdex], "1234567890abcdef")) return null;
-        } else spcftn.int_size >> 2;
+        } else lim;
     }
 
     pub fn create(source: []const u8) Lexer {
@@ -87,7 +88,7 @@ pub const Lexer = struct {
                     return Lexeme{ .tag = .val, .span = .{ next_loc, val } };
                 }
 
-                const limit = next_loc + @min(next_loc + spcftn.ident_char_cap, src.len - next_loc);
+                const limit = next_loc + @min(spcftn.ident_char_cap, src.len - next_loc); //was not checking for a limit but instead loc + limit, always picking the option of "until the end"
                 var delimiter_loc = next_loc + std.mem.indexOfAnyPos(u8, src[next_loc..limit], 0, &std.ascii.whitespace ++ ident_delimiters).?;
                 if (!std.ascii.isWhitespace(src[delimiter_loc])) while (src[delimiter_loc - 1] == 'v') : (delimiter_loc -= 1) {};
                 if (delimiter_loc - (spcftn.int_size >> 2) < next_loc) {}
@@ -185,3 +186,14 @@ test "lexer" {
 } //ff7
 //[-.numvav+]
 // making changes here doesn't magically mean they change over in tok-test.bf
+
+test "lexer-out" {
+    const souy = "ff7f";
+    var tokeniser = Lexer.create(souy);
+    comptime var i = 0;
+    inline while (true) : (i += 1) {
+        const token = tokeniser.next();
+        std.debug.print("{}\n", .{token});
+        if (token.tag == .eof or i > 20) break;
+    }
+}
