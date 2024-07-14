@@ -87,11 +87,8 @@ pub const Lexer = struct {
                     self.loc = val;
                     return Lexeme{ .tag = .val, .span = .{ next_loc, val } };
                 }
-
-                const limit = next_loc + @min(spcftn.ident_char_cap, src.len - next_loc); //was not checking for a limit but instead loc + limit, always picking the option of "until the end"
-                var delimiter_loc = next_loc + std.mem.indexOfAnyPos(u8, src[next_loc..limit], 0, &std.ascii.whitespace ++ ident_delimiters).?;
+                var delimiter_loc = std.mem.indexOfAnyPos(u8, src, next_loc, &std.ascii.whitespace ++ ident_delimiters).?;
                 if (!std.ascii.isWhitespace(src[delimiter_loc])) while (src[delimiter_loc - 1] == 'v') : (delimiter_loc -= 1) {};
-                if (delimiter_loc - (spcftn.int_size >> 2) < next_loc) {}
                 self.loc = delimiter_loc;
                 return Lexeme{ .tag = .ident, .span = .{ next_loc, delimiter_loc } };
             },
@@ -188,12 +185,12 @@ test "lexer" {
 // making changes here doesn't magically mean they change over in tok-test.bf
 
 test "lexer-out" {
-    const souy = "ff7f";
+    const souy = @embedFile("test-Programs/yeen.bf");
     var tokeniser = Lexer.create(souy);
     comptime var i = 0;
     inline while (true) : (i += 1) {
         const token = tokeniser.next();
         std.debug.print("{}\n", .{token});
-        if (token.tag == .eof or i > 20) break;
+        if (token.tag == .eof or i > 300) break;
     }
 }

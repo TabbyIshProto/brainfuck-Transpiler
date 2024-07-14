@@ -38,8 +38,8 @@
 
 ,v-.v = 1_less       # compiler should recognise the 1 ,v in there and accept 1 input to the function "1_less"
 $1_less|c|.      # output should be 'b',    the whole function should be run on a parrallel tape which doesnt interfear with itsself
-            ^^ note that this can be done with traditional brainfuck using an "anchor / tether" -> +[->+]- and either sacrificing 255 and 254 and- 
-            -253 for each function, or having mutliple searched / nested loops to search for N 255's ahead
+            #^^ note that this can be done with traditional brainfuck using an "anchor / tether" -> +[->+]- and either sacrificing 255 and 254 and- 
+            #-253 for each function, or having mutliple searched / nested loops to search for N 255's ahead
 
 
 macros vs function calls, same tape vs alt tape,
