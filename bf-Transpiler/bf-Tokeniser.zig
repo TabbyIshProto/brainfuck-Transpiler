@@ -86,7 +86,7 @@ pub const Lexer = struct {
                 const is_val: ?usize = check(src, next_loc);
                 if (is_val) |val| {
                     self.loc = val;
-                    return Lexeme{ .tag = .val, .span = .{ next_loc, val } };
+                    return Lexeme{ .tag = .val, .span = span };
                 }
                 var delimiter_loc = std.mem.indexOfAnyPos(u8, src, next_loc, &std.ascii.whitespace ++ ident_delimiters).?;
                 if (!std.ascii.isWhitespace(src[delimiter_loc])) while (src[delimiter_loc - 1] == 'v') : (delimiter_loc -= 1) {};
