@@ -52,8 +52,9 @@ pub const Lexer = struct {
     //          _zy xwvutsrq ponmlkji hgfedcba
 
     pub const LxrState = enum {
-        default,
+        unknown,
         ident,
+        val,
     }; // 0 1 2 3 4, len = 5
 
     fn check(src: []const u8, loc: usize) ?usize { // ff7f
@@ -89,29 +90,14 @@ pub const Lexer = struct {
                 }
                 var delimiter_loc = std.mem.indexOfAnyPos(u8, src, next_loc, &std.ascii.whitespace ++ ident_delimiters).?;
                 if (!std.ascii.isWhitespace(src[delimiter_loc])) while (src[delimiter_loc - 1] == 'v') : (delimiter_loc -= 1) {};
-                self.loc = delimiter_loc;
-                return Lexeme{ .tag = .ident, .span = .{ next_loc, delimiter_loc } };
+                return Lexeme{ .tag = .ident, .span = span(self, next_loc, delimiter_loc) };
             },
-            // if its any non 0-f or v char then guaranteed ident
-            // 0 - 9 guaranteed num
-            // g - z A - Z _ [minus v] guaranteed ident
-            // a-f and v are edge cases
             '0'...'9' => {
                 const digits = "1234567890abcdef";
                 return Lexeme{ .tag = .val, .span = find(.range, digits, self, next_loc) };
             },
-            '+', '-', '>', '<', '^', 'v' => {
-                const caller_char: []const u8 = &[1]u8{char};
-                return Lexeme{
-                    .tag = get(caller_char[0]), // slice because of vv func
-                    .span = find(.range, caller_char, self, next_loc),
-                };
-            },
-            '[' => LexemeTag.openPar,
-            ']' => LexemeTag.closePar,
-            '@' => LexemeTag.@"@",
-
-            ',', '.', '=' => blk: {
+            '+', '-', '>', '<', '^', 'v' => return Lexeme{ .tag = get(char), .span = find(.range, &[1]u8{char}, self, next_loc) },
+            '[', ']', '@', ',', '.', '=' => blk: {
                 //self.state = .ident;
                 break :blk get(char);
             },
@@ -132,8 +118,12 @@ pub const Lexer = struct {
             .range => std.mem.indexOfNonePos(u8, self.source, loc + 1, vals) orelse self.source.len,
             .until => std.mem.indexOfAnyPos(u8, self.source, loc + 1, vals) orelse self.source.len,
         };
-        self.loc = diff;
-        return .{ loc, diff };
+        return span(self, loc, diff);
+    }
+
+    fn span(self: *Lexer, from: usize, to: usize) [2]usize {
+        self.loc = to;
+        return .{ from, to };
     }
 
     const Polarity = enum {
@@ -154,6 +144,9 @@ pub const Lexer = struct {
             ',' => LexemeTag.@",",
             '.' => LexemeTag.@".",
             '=' => LexemeTag.@"=",
+            '[' => LexemeTag.openPar,
+            ']' => LexemeTag.closePar,
+            '@' => LexemeTag.@"@",
             else => LexemeTag.invalidette,
         };
     }
